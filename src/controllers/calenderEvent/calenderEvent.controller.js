@@ -1,4 +1,4 @@
-import { CalendarEvent } from "../../models/CalenderEvent/CalenderEvent.model.js";
+import { CalendarEvent } from "../../models/calenderEvent/calenderEvent.model.js";
 import { ApiResponse } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 

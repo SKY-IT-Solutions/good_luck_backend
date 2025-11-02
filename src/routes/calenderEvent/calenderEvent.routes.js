@@ -1,13 +1,6 @@
 import express from "express";
-import {
-  addImageToEvent,
-  createCalendarEvent,
-  deleteCalendarEventById,
-  getAllCalendarEvents,
-  getEventsByType,
-  removeImageFromEvent,
-  updateCalendarEventById,
-} from "../../controllers/calenderEvent/CalenderEvent.controller.js";
+import { addImageToEvent, createCalendarEvent, deleteCalendarEventById, getAllCalendarEvents, getEventsByType, removeImageFromEvent, updateCalendarEventById } from './../../controllers/calenderEvent/calenderEvent.controller.js';
+
 
 const router = express.Router();
 
