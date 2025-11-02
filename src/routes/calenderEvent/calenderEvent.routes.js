@@ -7,7 +7,7 @@ import {
   getEventsByType,
   removeImageFromEvent,
   updateCalendarEventById,
-} from "../../controllers/CalenderEvent/CalenderEvent.controller.js";
+} from "../../controllers/calenderEvent/CalenderEvent.controller.js";
 
 const router = express.Router();
 
