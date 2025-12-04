@@ -53,6 +53,8 @@ import adminAdRoutes from "./routes/advertisement/adminAd.routes.js";
 import paymentRouter from "./routes/payment/payment.routes.js";
 import razorpayRouter from "./routes/payment/razorpay.routes.js";
 import calenderEventRouter from "./routes/calenderEvent/calenderEvent.routes.js";
+import commissionRouter from "./routes/commission/commission.routes.js";
+import affiliateRouter from "./routes/affiliate/affiliate.routes.js";
 
 // Use routes
 app.use("/good_luck/api/v1/admin", adminRoutes);
@@ -87,6 +89,8 @@ app.use("/good_luck/api/v1/localCategory", localCategoryRouter);
 app.use("/good_luck/api/v1/localService", localServiceRouter);
 app.use("/good_luck/api/v1/calender-event", calenderEventRouter);
 app.use("/good_luck/api/v1/admin-ads", adminAdRoutes);
+app.use("/good_luck/api/v1/commission", commissionRouter);
+app.use("/good_luck/api/v1/affiliate", affiliateRouter);
 app.use("/", paymentRouter);
 app.use("/", razorpayRouter);
 

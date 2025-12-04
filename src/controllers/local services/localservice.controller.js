@@ -106,7 +106,6 @@ export const createLocalService = asyncHandler(async (req, res, next) => {
 });
 
 // Get All Local Services with filtering and search
-
 export const getAllLocalServices = asyncHandler(async (req, res, next) => {
   try {
     const {

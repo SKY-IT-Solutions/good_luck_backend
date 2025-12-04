@@ -2,11 +2,13 @@ import { Admin } from "../../models/admin/admin.model.js";
 import AffiliateMarketer from "../../models/affiliateMarketer/affiliateMarketer.model.js";
 import { Astrologer } from "../../models/astrologer/astroler.model.js";
 import { User } from "../../models/auth/user.model.js";
+import CommissionHistory from "../../models/commission/commission.model.js";
 import Order from "../../models/product/order.model.js";
 import Product from "../../models/product/product.model.js";
 import { ApiError } from "../../utils/apiError.js";
 import { ApiResponse } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { generateTransactionId } from "../../utils/generateTNX.js";
 
 // Create Order
 export const createOrder = asyncHandler(async (req, res) => {
@@ -57,62 +59,14 @@ export const createOrder = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Product not found");
     }
 
+    // Generate transaction ID if not provided
+    const finalTransactionId = transaction_id || generateTransactionId();
+
     let commission = 0;
     let promoUser = null;
+    let promoterType = null;
 
-    if (promo_code) {
-      // Check if the promo code belongs to an astrologer
-      promoUser = await Astrologer.findOne({ promo_code });
-      if (!promoUser) {
-        // Check if the promo code belongs to an affiliate marketer
-        promoUser = await AffiliateMarketer.findOne({ promo_code });
-      }
-
-      if (!promoUser) {
-        return res
-          .status(404)
-          .json(new ApiResponse(404, null, "Promo code is not available"));
-      }
-
-      commission = total_price * 0.3; // 30% commission
-      promoUser.wallet.balance += commission;
-      promoUser.wallet.transactionHistory.push({
-        transactionId: transaction_id || generateTransactionId(),
-        timestamp: Date.now(),
-        type: "credit",
-        credit_type: "Ecom",
-        amount: commission,
-        description: "Commission for order",
-      });
-      await promoUser.save();
-    }
-
-    // Add the remaining amount to the admin wallet
-    const admin = await Admin.findOne();
-    const adminCommission = total_price - commission;
-    admin.wallet.balance += adminCommission;
-    admin.wallet.transactionHistory.push({
-      transactionId: transaction_id || generateTransactionId(),
-      timestamp: Date.now(),
-      type: "credit",
-      credit_type: "Ecom",
-      amount: adminCommission,
-      description: "Admin commission for order",
-    });
-    await admin.save();
-
-    // Debit the user's wallet
-    // user.wallet.balance -= total_price;
-    user.wallet.transactionHistory.push({
-      transactionId: transaction_id || generateTransactionId(),
-      timestamp: Date.now(),
-      type: "debit",
-      debit_type: "Ecom",
-      amount: total_price,
-      description: "Payment for order",
-    });
-    await user.save();
-
+    // Create order first
     const newOrder = new Order({
       userId,
       name,
@@ -125,18 +79,101 @@ export const createOrder = asyncHandler(async (req, res) => {
       total_price,
       payment_method,
       is_payment_done,
-      transaction_id,
+      transaction_id: finalTransactionId,
       isPromoCodeApplied: promo_code !== undefined,
       isSuperNoteApplied,
     });
-    console.log(newOrder);
 
     await newOrder.save();
 
+    if (promo_code) {
+      // Check if the promo code belongs to an astrologer
+      promoUser = await Astrologer.findOne({ promo_code });
+      if (promoUser) {
+        promoterType = "Astrologer";
+      } else {
+        // Check if the promo code belongs to an affiliate marketer
+        promoUser = await AffiliateMarketer.findOne({ promo_code });
+        if (promoUser) {
+          promoterType = "AffiliateMarketer";
+        }
+      }
+
+      if (!promoUser) {
+        return res
+          .status(404)
+          .json(new ApiResponse(404, null, "Promo code is not available"));
+      }
+
+      commission = total_price * 0.3; // 30% commission
+
+      // Update promoter's wallet
+      promoUser.wallet.balance += commission;
+      promoUser.wallet.transactionHistory.push({
+        transactionId: finalTransactionId,
+        timestamp: Date.now(),
+        type: "credit",
+        credit_type: "Ecom",
+        amount: commission,
+        description: "Commission for order",
+      });
+      await promoUser.save();
+
+      // ✅ Create Commission History Record
+      const commissionHistory = new CommissionHistory({
+        promoterId: promoUser._id,
+        promoterType: promoterType,
+        orderId: newOrder._id,
+        userId: userId,
+        productId: order_details,
+        promoCode: promo_code,
+        orderAmount: total_price,
+        commissionAmount: commission,
+        commissionPercentage: 30,
+        transactionId: finalTransactionId,
+        orderDate: new Date(),
+        status: "credited",
+      });
+
+      await commissionHistory.save();
+      console.log("Commission History created:", commissionHistory);
+    }
+
+    // Add the remaining amount to the admin wallet
+    const admin = await Admin.findOne();
+    const adminCommission = total_price - commission;
+    admin.wallet.balance += adminCommission;
+    admin.wallet.transactionHistory.push({
+      transactionId: finalTransactionId,
+      timestamp: Date.now(),
+      type: "credit",
+      credit_type: "Ecom",
+      amount: adminCommission,
+      description: "Admin commission for order",
+    });
+    await admin.save();
+
+    // Add transaction to user's wallet history
+    user.wallet.transactionHistory.push({
+      transactionId: finalTransactionId,
+      timestamp: Date.now(),
+      type: "debit",
+      debit_type: "Ecom",
+      amount: total_price,
+      description: "Payment for order",
+    });
+    await user.save();
+
+    // Populate the order data for response
+    const populatedOrder = await Order.findById(newOrder._id)
+      .populate("order_details")
+      .populate("userId", "Fname Lname phone");
+
     return res
       .status(201)
-      .json(new ApiResponse(201, newOrder, "Order created successfully"));
+      .json(new ApiResponse(201, populatedOrder, "Order created successfully"));
   } catch (error) {
+    console.error("Error creating order:", error);
     return res
       .status(500)
       .json(new ApiResponse(500, null, "Internal Server Error", error.message));

@@ -906,31 +906,153 @@ export const getAllReviewsByAstrologerId = asyncHandler(async (req, res) => {
   }
 });
 
-// Get wallet transaction history by ID
+// Get wallet transaction history by ID with pagination
 export const getWalletTransactionHistoryById = asyncHandler(
   async (req, res) => {
-    const { id } = req.params;
+    try {
+      const { id } = req.params;
+      
+      // Get pagination parameters from query
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+      
+      // Optional filters
+      const { type, startDate, endDate, transactionId } = req.query;
 
-    // Find the Astrologer by ID
-    const astrologer = await Astrologer.findById(id);
-    if (!astrologer) {
+      // Find the Astrologer by ID
+      const astrologer = await Astrologer.findById(id);
+      if (!astrologer) {
+        return res
+          .status(404)
+          .json(new ApiResponse(404, null, "Astrologer not found"));
+      }
+
+      // Get all transactions from wallet
+      let transactions = astrologer.wallet.transactionHistory || [];
+      
+      // Apply filters if provided
+      if (type) {
+        transactions = transactions.filter(t => t.type === type);
+      }
+      
+      if (transactionId) {
+        transactions = transactions.filter(t => 
+          t.transactionId && t.transactionId.toString().includes(transactionId)
+        );
+      }
+      
+      // Date filtering
+      if (startDate || endDate) {
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+        
+        transactions = transactions.filter(t => {
+          const transactionDate = new Date(t.timestamp || t.createdAt);
+          
+          if (start && end) {
+            return transactionDate >= start && transactionDate <= end;
+          } else if (start) {
+            return transactionDate >= start;
+          } else if (end) {
+            return transactionDate <= end;
+          }
+          return true;
+        });
+      }
+      
+      // Sort by timestamp (newest first)
+      transactions.sort((a, b) => {
+        const dateA = new Date(a.timestamp || a.createdAt);
+        const dateB = new Date(b.timestamp || b.createdAt);
+        return dateB - dateA;
+      });
+      
+      // Get total count for pagination
+      const totalTransactions = transactions.length;
+      
+      // Apply pagination
+      const paginatedTransactions = transactions.slice(skip, skip + limit);
+      
+      // Calculate summary statistics
+      const totalCredit = transactions
+        .filter(t => t.type === 'credit')
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+        
+      const totalDebit = transactions
+        .filter(t => t.type === 'debit')
+        .reduce((sum, t) => sum + (t.amount || 0), 0);
+      
+      // Group by date for chart data
+      const transactionsByDate = {};
+      paginatedTransactions.forEach(t => {
+        const date = new Date(t.timestamp || t.createdAt).toISOString().split('T')[0];
+        if (!transactionsByDate[date]) {
+          transactionsByDate[date] = {
+            date: date,
+            credit: 0,
+            debit: 0,
+            count: 0
+          };
+        }
+        
+        if (t.type === 'credit') {
+          transactionsByDate[date].credit += t.amount || 0;
+        } else if (t.type === 'debit') {
+          transactionsByDate[date].debit += t.amount || 0;
+        }
+        transactionsByDate[date].count++;
+      });
+      
+      const response = {
+        astrologerInfo: {
+          id: astrologer._id,
+          name: `${astrologer.Fname || ''} ${astrologer.Lname || ''}`.trim(),
+          phone: astrologer.phone,
+          currentBalance: astrologer.wallet.balance || 0
+        },
+        transactions: paginatedTransactions,
+        summary: {
+          totalTransactions: totalTransactions,
+          totalCredit: totalCredit,
+          totalDebit: totalDebit,
+          netBalance: totalCredit - totalDebit,
+          currentBalance: astrologer.wallet.balance || 0
+        },
+        chartData: Object.values(transactionsByDate),
+        pagination: {
+          currentPage: page,
+          limit: limit,
+          totalPages: Math.ceil(totalTransactions / limit),
+          totalRecords: totalTransactions,
+          hasNextPage: page < Math.ceil(totalTransactions / limit),
+          hasPrevPage: page > 1
+        },
+        filters: {
+          type: type || null,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          transactionId: transactionId || null
+        }
+      };
+
       return res
-        .status(404)
-        .json(new ApiResponse(404, null, "Astrologer not found"));
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            response,
+            "Wallet transaction history retrieved successfully"
+          )
+        );
+    } catch (error) {
+      console.error("Error fetching wallet transaction history:", error);
+      return res
+        .status(500)
+        .json(
+          new ApiResponse(500, null, "Internal Server Error", error.message)
+        );
     }
-
-    // Get the wallet transaction history
-    const transactionHistory = astrologer.wallet.transactionHistory;
-
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          { transactions: transactionHistory },
-          "Wallet transaction history retrieved successfully"
-        )
-      );
   }
 );
 

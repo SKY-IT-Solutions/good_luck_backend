@@ -21,6 +21,7 @@ import { MatrimonySubscription } from "../../models/subscription/matrimony.subsc
 import { DatingSubscription } from "../../models/subscription/dating.subscription.js";
 import { LocalSubscription } from "../../models/subscription/localserviceSubscription.js";
 import sendNotification from "../../utils/onesignal.js";
+import generateUniquePromoCode from "../../utils/generatePromocode.js";
 
 // Helper to generate access and refresh tokens
 const generateAccessAndRefreshToken = async (authId) => {
@@ -253,7 +254,12 @@ const auth_request_verify_OTP = asyncHandler(async (req, res) => {
   }
 
   // Bypass OTP validation for specific numbers with exact verificationId and OTP
-  const bypassNumbers = ["7872358979", "7679039012", "9733524164"];
+  const bypassNumbers = [
+    "7872358979",
+    "7679039012",
+    "9733524164",
+    "8145328152",
+  ];
   let otpValidationSuccess = true;
 
   if (
@@ -272,6 +278,7 @@ const auth_request_verify_OTP = asyncHandler(async (req, res) => {
     return res.status(400).json(new ApiResponse(400, null, "Invalid OTP"));
   }
 
+  // Create Auth record
   const newAuth = new Auth({
     phone,
     otp: "",
@@ -282,50 +289,219 @@ const auth_request_verify_OTP = asyncHandler(async (req, res) => {
   });
   await newAuth.save();
 
-  // Create a new User record
-  const newUser = new User({
-    authId: newAuth._id,
-    phone,
-    Fname: authRequestRecord.Fname || "",
-    Lname: authRequestRecord.Lname || "",
-    gender: authRequestRecord.gender || "Others",
-    date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
-    isVerified: true,
-    isAstrologer: authRequestRecord.isAstrologer,
-    isAffiliate_marketer: authRequestRecord.isAffiliate_marketer,
-    isAdmin: authRequestRecord.isAdmin,
-    wallet: {
-      transactionHistory: [
-        {
-          transactionId: generateTransactionId(),
-          timestamp: Date.now(),
-          type: "credit",
-          credit_type: "others",
-          amount: 0,
-          description: "Initial wallet setup",
-        },
-      ],
-    },
-    oneSignalPlayerId: oneSignalPlayerId || null,
-  });
-  await newUser.save();
+  // Initialize variables
+  let newUser = null;
+  let newAffiliate = null;
+  let newAstrologer = null;
+  let newAdmin = null;
 
-  // Create an Admin record if isAdmin is true
-  if (authRequestRecord.isAdmin) {
-    const newAdmin = new Admin({
+  // Handle different user types
+  if (authRequestRecord.user_type === "affiliate_marketer") {
+    // Create User record for affiliate marketer
+    newUser = new User({
+      authId: newAuth._id,
+      phone,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      gender: authRequestRecord.gender || "Others",
+      date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
+      isVerified: true,
+      isAffiliate_marketer: true,
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial wallet setup",
+          },
+        ],
+      },
+      oneSignalPlayerId: oneSignalPlayerId || null,
+    });
+    await newUser.save();
+
+    const promoCode = await generateUniquePromoCode();
+
+    // Create Affiliate Marketer record
+    newAffiliate = new AffiliateMarketer({
+      authId: newAuth._id,
+      userId: newUser._id,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      profile_picture:
+        authRequestRecord.profile_picture ||
+        "https://i.fbcd.co/products/resized/resized-750-500/d4c961732ba6ec52c0bbde63c9cb9e5dd6593826ee788080599f68920224e27d.jpg",
+      phone,
+      promo_code: promoCode, // Generate unique promo code
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial affiliate wallet setup",
+          },
+        ],
+      },
+    });
+    await newAffiliate.save();
+
+    // Update User record with affiliate ID if needed
+    // You might want to store affiliateId in User model if you have that field
+    // newUser.affiliateId = newAffiliate._id;
+    // await newUser.save();
+  } else if (authRequestRecord.user_type === "astrologer") {
+    // Create User record for astrologer
+    newUser = new User({
+      authId: newAuth._id,
+      phone,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      gender: authRequestRecord.gender || "Others",
+      date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
+      isVerified: true,
+      isAstrologer: true,
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial wallet setup",
+          },
+        ],
+      },
+      oneSignalPlayerId: oneSignalPlayerId || null,
+    });
+    await newUser.save();
+
+    // Create Astrologer record
+    newAstrologer = new Astrologer({
+      authId: newAuth._id,
+      userId: newUser._id,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      phone,
+      gender: authRequestRecord.gender || "Others",
+      date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
+      profile_picture:
+        authRequestRecord.profile_picture ||
+        "https://i.fbcd.co/products/resized/resized-750-500/d4c961732ba6ec52c0bbde63c9cb9e5dd6593826ee788080599f68920224e27d.jpg",
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial astrologer wallet setup",
+          },
+        ],
+      },
+      // Add other astrologer-specific fields
+      services: authRequestRecord.services || [],
+      isVerified: false, // Astrologer needs separate verification
+      isActive: false,
+    });
+    await newAstrologer.save();
+  } else if (authRequestRecord.user_type === "admin") {
+    // Create User record for admin
+    newUser = new User({
+      authId: newAuth._id,
+      phone,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      gender: authRequestRecord.gender || "Others",
+      date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
+      isVerified: true,
+      isAdmin: true,
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial wallet setup",
+          },
+        ],
+      },
+      oneSignalPlayerId: oneSignalPlayerId || null,
+    });
+    await newUser.save();
+
+    // Create Admin record
+    newAdmin = new Admin({
       authId: newAuth._id,
       userId: newUser._id,
     });
     await newAdmin.save();
+  } else {
+    // Regular user
+    newUser = new User({
+      authId: newAuth._id,
+      phone,
+      Fname: authRequestRecord.Fname || "",
+      Lname: authRequestRecord.Lname || "",
+      gender: authRequestRecord.gender || "Others",
+      date_of_birth: authRequestRecord.date_of_birth || "00-00-0000",
+      isVerified: true,
+      wallet: {
+        transactionHistory: [
+          {
+            transactionId: generateTransactionId(),
+            timestamp: Date.now(),
+            type: "credit",
+            credit_type: "others",
+            amount: 0,
+            description: "Initial wallet setup",
+          },
+        ],
+      },
+      oneSignalPlayerId: oneSignalPlayerId || null,
+    });
+    await newUser.save();
   }
 
+  // Generate tokens
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
     newAuth._id
   );
 
+  // Delete auth request record
   await authRequestRecord.deleteOne();
 
-  // Send a "Welcome to the App" notification
+  // Prepare response data
+  const responseData = {
+    authId: newAuth._id,
+    userId: newUser._id,
+    role: newAuth.user_type,
+    phone: newUser.phone,
+    accessToken,
+    refreshToken,
+    superNote: newUser ? newUser.superNote : null,
+  };
+
+  // Add additional IDs based on user type
+  if (authRequestRecord.user_type === "affiliate_marketer" && newAffiliate) {
+    responseData.affiliateId = newAffiliate._id;
+    responseData.promo_code = newAffiliate.promo_code;
+  } else if (authRequestRecord.user_type === "astrologer" && newAstrologer) {
+    responseData.astrologerId = newAstrologer._id;
+  } else if (authRequestRecord.user_type === "admin" && newAdmin) {
+    responseData.adminId = newAdmin._id;
+  }
+
+  // Send welcome notification
   if (oneSignalPlayerId) {
     try {
       await sendNotification(
@@ -338,22 +514,15 @@ const auth_request_verify_OTP = asyncHandler(async (req, res) => {
     }
   }
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        authId: newAuth._id,
-        userId: newUser._id,
-        role: newAuth.user_type,
-        phone: newUser.phone,
-        accessToken,
-        refreshToken,
-        superNote: newUser ? newUser.superNote : null,
-        promo_code: newUser ? newUser.promo_code : null,
-      },
-      "OTP Verified and new user created"
-    )
-  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        responseData,
+        `OTP Verified and ${authRequestRecord.user_type} account created successfully`
+      )
+    );
 });
 
 // Login User
@@ -609,7 +778,12 @@ const login_verify_OTP = asyncHandler(async (req, res) => {
     const astrologer = await Astrologer.findOne({ phone });
 
     // Bypass OTP validation for specific numbers with exact verificationId and OTP
-    const bypassNumbers = ["7872358979", "7679039012", "9733524164"];
+    const bypassNumbers = [
+      "7872358979",
+      "7679039012",
+      "9733524164",
+      "8145328152",
+    ];
     let otpValidationSuccess = true;
 
     if (
