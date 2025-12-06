@@ -1,5 +1,6 @@
 import { User } from "../../models/auth/user.model.js";
 import { Matrimony } from "../../models/matrimony/matrimony.model.js";
+import { MatrimonyReportBlock } from "../../models/matrimony/matrimonyReportBlock.model.js";
 import { ApiResponse } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { mongoose } from "mongoose";
@@ -179,7 +180,7 @@ export const getAllMatrimonyProfile = asyncHandler(async (req, res) => {
     // Get matrimony IDs of users we shouldn't show
     const excludedMatrimonyProfiles = await Matrimony.find({
       $or: [
-        { userId: { $in: sentLikes } }, // Users we've liked
+        { userId: { $in: likedProfiles } }, // Users we've liked
         { userId: { $in: blockedUserIds } }, // Blocked users
         { userId: id }, // Own profile
       ],
@@ -193,7 +194,7 @@ export const getAllMatrimonyProfile = asyncHandler(async (req, res) => {
     const filteredMatrimonyProfiles = await Matrimony.aggregate([
       {
         $match: {
-          _id: { $nin: [...excludedMatrimonyIds, ...pendingProfileIds] }, // Exclude by matrimony ID
+          _id: { $nin: [...excludedMatrimonyIds] }, // Exclude by matrimony ID
           searching_for: {
             $ne: ownMatrimonyProfile.searching_for,
           }, // Looking for opposite gender
