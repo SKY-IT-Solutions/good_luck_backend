@@ -197,15 +197,31 @@ export const getBlockedUsers = asyncHandler(async (req, res) => {
     const blockedRecords = await DatingReportBlock.find({
       blockerId: userId,
       isBlocked: true,
-    }).populate("blockedId", "Fname Lname photos");
+    }).populate({
+      path: "blockedId",
+      select: "Fname Lname photos",
+    });
 
-    // Extract user details
-    const blockedUsers = blockedRecords.map((record) => ({
+    // Filter out records where blockedId is null or doesn't exist
+    const validBlockedRecords = blockedRecords.filter(
+      (record) => record.blockedId && record.blockedId._id
+    );
+
+    if (validBlockedRecords.length === 0) {
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, [], "No blocked users found")
+        );
+    }
+
+    // Extract user details with null checking
+    const blockedUsers = validBlockedRecords.map((record) => ({
       blockId: record._id,
       userId: record.blockedId._id,
-      Fname: record.blockedId.Fname,
-      Lname: record.blockedId.Lname,
-      photos: record.blockedId.photos,
+      Fname: record.blockedId.Fname || "User",
+      Lname: record.blockedId.Lname || "",
+      photos: record.blockedId.photos || [],
       blockedAt: record.blockedAt,
     }));
 
@@ -225,6 +241,7 @@ export const getBlockedUsers = asyncHandler(async (req, res) => {
       .json(new ApiResponse(500, null, "Error fetching blocked users"));
   }
 });
+
 
 // Get reports for a user (Admin only)
 export const getUserReports = asyncHandler(async (req, res) => {

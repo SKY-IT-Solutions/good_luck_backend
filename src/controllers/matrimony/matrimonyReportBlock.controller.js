@@ -209,34 +209,73 @@ export const getBlockedMatrimonyUsers = asyncHandler(async (req, res) => {
       select: "Fname Lname",
     });
 
+    // Filter out records where blockedId is null
+    const validBlockedRecords = blockedRecords.filter(
+      (record) => record.blockedId && record.blockedId._id
+    );
+
+    if (validBlockedRecords.length === 0) {
+      return res
+        .status(200)
+        .json(new ApiResponse(200, [], "No blocked matrimony users found"));
+    }
+
     // Fetch full matrimony profiles for blocked users
     const blockedUsers = await Promise.all(
-      blockedRecords.map(async (record) => {
-        const matrimonyProfile = await Matrimony.findOne({
-          userId: record.blockedId._id,
-        }).select("Fname Lname photo city state age gender");
+      validBlockedRecords.map(async (record) => {
+        try {
+          const matrimonyProfile = await Matrimony.findOne({
+            userId: record.blockedId._id,
+          }).select("Fname Lname photo city state age gender");
 
-        return {
-          blockId: record._id,
-          userId: record.blockedId._id,
-          Fname: matrimonyProfile?.Fname || "User",
-          Lname: matrimonyProfile?.Lname || "",
-          photo: matrimonyProfile?.photo || [],
-          city: matrimonyProfile?.city || "",
-          state: matrimonyProfile?.state || "",
-          age: matrimonyProfile?.age || null,
-          gender: matrimonyProfile?.gender || "",
-          blockedAt: record.blockedAt,
-        };
+          if (!matrimonyProfile) {
+            return {
+              blockId: record._id,
+              userId: record.blockedId._id,
+              Fname: record.blockedId.Fname || "User",
+              Lname: record.blockedId.Lname || "",
+              photo: [],
+              city: "Not available",
+              state: "Not available",
+              age: null,
+              gender: "Not available",
+              blockedAt: record.blockedAt,
+              profileExists: false,
+            };
+          }
+
+          return {
+            blockId: record._id,
+            userId: record.blockedId._id,
+            Fname: matrimonyProfile.Fname || "User",
+            Lname: matrimonyProfile.Lname || "",
+            photo: matrimonyProfile.photo || [],
+            city: matrimonyProfile.city || "",
+            state: matrimonyProfile.state || "",
+            age: matrimonyProfile.age || null,
+            gender: matrimonyProfile.gender || "",
+            blockedAt: record.blockedAt,
+            profileExists: true,
+          };
+        } catch (error) {
+          console.error(
+            `Error fetching profile for user ${record.blockedId._id}:`,
+            error
+          );
+          return null;
+        }
       })
     );
+
+    // Filter out any null results from the map
+    const filteredBlockedUsers = blockedUsers.filter((user) => user !== null);
 
     return res
       .status(200)
       .json(
         new ApiResponse(
           200,
-          blockedUsers,
+          filteredBlockedUsers,
           "Blocked matrimony users retrieved successfully"
         )
       );
