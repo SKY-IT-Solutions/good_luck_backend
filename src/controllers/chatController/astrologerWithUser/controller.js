@@ -67,6 +67,12 @@ export async function handleChatRequest(io, data, socket) {
     console.log(
       `Notifying astrologer ${astrologer.socketId} about incoming chat request from user ${userId}`
     );
+
+    io.to(user.socketId).emit("chat-request-success", {
+      requestId: chatRequest._id,
+      astrologerId,
+      chatType,
+    });
     io.to(astrologer.socketId).emit("chat-request-from-user", {
       requestId: chatRequest._id,
       userId,
@@ -763,7 +769,7 @@ export const getAstrologerChatHistory = asyncHandler(async (req, res) => {
 // Get chat list for a user or astrologer
 export const getChatList = asyncHandler(async (req, res) => {
   const { id } = req.params;
-
+  console.log("Fetching chat list for ID:", id);
   if (!id) {
     return res
       .status(400)
@@ -1125,6 +1131,8 @@ export async function handleUserCancelChatRequest(io, data, socket) {
     const astrologer = await Astrologer.findById(chatRequest.astrologerId);
     if (astrologer && astrologer.socketId) {
       // Notify astrologer about the cancellation
+
+      console.log("cancelling call");
       io.to(astrologer.socketId).emit("chat-request-cancelled-by-user", {
         requestId,
         userId,
