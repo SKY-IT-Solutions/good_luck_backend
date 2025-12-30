@@ -911,12 +911,12 @@ export const getWalletTransactionHistoryById = asyncHandler(
   async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Get pagination parameters from query
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
       const skip = (page - 1) * limit;
-      
+
       // Optional filters
       const { type, startDate, endDate, transactionId } = req.query;
 
@@ -930,26 +930,28 @@ export const getWalletTransactionHistoryById = asyncHandler(
 
       // Get all transactions from wallet
       let transactions = astrologer.wallet.transactionHistory || [];
-      
+
       // Apply filters if provided
       if (type) {
-        transactions = transactions.filter(t => t.type === type);
+        transactions = transactions.filter((t) => t.type === type);
       }
-      
+
       if (transactionId) {
-        transactions = transactions.filter(t => 
-          t.transactionId && t.transactionId.toString().includes(transactionId)
+        transactions = transactions.filter(
+          (t) =>
+            t.transactionId &&
+            t.transactionId.toString().includes(transactionId)
         );
       }
-      
+
       // Date filtering
       if (startDate || endDate) {
         const start = startDate ? new Date(startDate) : null;
         const end = endDate ? new Date(endDate) : null;
-        
-        transactions = transactions.filter(t => {
+
+        transactions = transactions.filter((t) => {
           const transactionDate = new Date(t.timestamp || t.createdAt);
-          
+
           if (start && end) {
             return transactionDate >= start && transactionDate <= end;
           } else if (start) {
@@ -960,56 +962,58 @@ export const getWalletTransactionHistoryById = asyncHandler(
           return true;
         });
       }
-      
+
       // Sort by timestamp (newest first)
       transactions.sort((a, b) => {
         const dateA = new Date(a.timestamp || a.createdAt);
         const dateB = new Date(b.timestamp || b.createdAt);
         return dateB - dateA;
       });
-      
+
       // Get total count for pagination
       const totalTransactions = transactions.length;
-      
+
       // Apply pagination
       const paginatedTransactions = transactions.slice(skip, skip + limit);
-      
+
       // Calculate summary statistics
       const totalCredit = transactions
-        .filter(t => t.type === 'credit')
+        .filter((t) => t.type === "credit")
         .reduce((sum, t) => sum + (t.amount || 0), 0);
-        
+
       const totalDebit = transactions
-        .filter(t => t.type === 'debit')
+        .filter((t) => t.type === "debit")
         .reduce((sum, t) => sum + (t.amount || 0), 0);
-      
+
       // Group by date for chart data
       const transactionsByDate = {};
-      paginatedTransactions.forEach(t => {
-        const date = new Date(t.timestamp || t.createdAt).toISOString().split('T')[0];
+      paginatedTransactions.forEach((t) => {
+        const date = new Date(t.timestamp || t.createdAt)
+          .toISOString()
+          .split("T")[0];
         if (!transactionsByDate[date]) {
           transactionsByDate[date] = {
             date: date,
             credit: 0,
             debit: 0,
-            count: 0
+            count: 0,
           };
         }
-        
-        if (t.type === 'credit') {
+
+        if (t.type === "credit") {
           transactionsByDate[date].credit += t.amount || 0;
-        } else if (t.type === 'debit') {
+        } else if (t.type === "debit") {
           transactionsByDate[date].debit += t.amount || 0;
         }
         transactionsByDate[date].count++;
       });
-      
+
       const response = {
         astrologerInfo: {
           id: astrologer._id,
-          name: `${astrologer.Fname || ''} ${astrologer.Lname || ''}`.trim(),
+          name: `${astrologer.Fname || ""} ${astrologer.Lname || ""}`.trim(),
           phone: astrologer.phone,
-          currentBalance: astrologer.wallet.balance || 0
+          currentBalance: astrologer.wallet.balance || 0,
         },
         transactions: paginatedTransactions,
         summary: {
@@ -1017,7 +1021,7 @@ export const getWalletTransactionHistoryById = asyncHandler(
           totalCredit: totalCredit,
           totalDebit: totalDebit,
           netBalance: totalCredit - totalDebit,
-          currentBalance: astrologer.wallet.balance || 0
+          currentBalance: astrologer.wallet.balance || 0,
         },
         chartData: Object.values(transactionsByDate),
         pagination: {
@@ -1026,14 +1030,14 @@ export const getWalletTransactionHistoryById = asyncHandler(
           totalPages: Math.ceil(totalTransactions / limit),
           totalRecords: totalTransactions,
           hasNextPage: page < Math.ceil(totalTransactions / limit),
-          hasPrevPage: page > 1
+          hasPrevPage: page > 1,
         },
         filters: {
           type: type || null,
           startDate: startDate || null,
           endDate: endDate || null,
-          transactionId: transactionId || null
-        }
+          transactionId: transactionId || null,
+        },
       };
 
       return res
@@ -1082,8 +1086,30 @@ export const toggleAstrologerStatus = asyncHandler(async (req, res) => {
         .json(new ApiResponse(404, null, "Astrologer not found"));
     }
 
+    // Check if astrologer is currently busy
+    if (astrologer.status === "busy") {
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(
+            400,
+            null,
+            "Cannot change status while astrologer is busy in a call/chat"
+          )
+        );
+    }
+
     // Update isActive status
     astrologer.isActive = isActive;
+    
+    // Update status based on isActive value
+    if (isActive === false) {
+      astrologer.status = "offline";
+    } else {
+      // If making active, you might want to set status to "available" or keep current
+      astrologer.status = "available"; // or astrologer.status = astrologer.status;
+    }
+    
     await astrologer.save();
 
     return res
@@ -1091,7 +1117,10 @@ export const toggleAstrologerStatus = asyncHandler(async (req, res) => {
       .json(
         new ApiResponse(
           200,
-          { isActive: astrologer.isActive },
+          { 
+            isActive: astrologer.isActive, 
+            status: astrologer.status
+          },
           "Astrologer status updated successfully"
         )
       );
