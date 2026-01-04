@@ -290,10 +290,23 @@ export const setupSocketIO = (server) => {
     // Handle user disconnection
 // In your socket server file
 socket.on("disconnect", async () => {
-  console.log("🔌 A user disconnected:", socket.id);
-
+  console.log("🔌 DEBUG: Disconnect event triggered for socket:", socket.id);
+  console.log("🔌 DEBUG: Socket object exists?", !!socket);
+  console.log("🔌 DEBUG: Socket.id type:", typeof socket.id);
+  
+  // Check if Astrologer model is available
+  console.log("🔌 DEBUG: Astrologer model loaded?", !!Astrologer);
+  
   try {
+    console.log("🔌 DEBUG: Entering try block");
+    
+    // Test a simple query first
+    console.log("🔌 DEBUG: Testing database connection...");
+    const test = await Astrologer.findOne({ socketId: socket.id }).select('_id').lean();
+    console.log("🔌 DEBUG: Test query result:", test);
+    
     // Find and update the astrologer's status
+    console.log("🔌 DEBUG: Attempting findOneAndUpdate...");
     const updatedAstrologer = await Astrologer.findOneAndUpdate(
       { socketId: socket.id },
       { 
@@ -306,50 +319,20 @@ socket.on("disconnect", async () => {
       { new: true }
     );
     
+    console.log("🔌 DEBUG: Update result:", updatedAstrologer);
+    
     if (updatedAstrologer) {
-      console.log(`✅ Astrologer ${updatedAstrologer._id} (${updatedAstrologer.Fname}) set to offline`);
-      
-      // Broadcast to ALL connected sockets that this astrologer went offline
-      io.emit('astrologer_status_changed', {
-        astrologerId: updatedAstrologer._id,
-        status: 'offline',
-        name: `${updatedAstrologer.Fname} ${updatedAstrologer.Lname}`,
-        timestamp: new Date()
-      });
-
-      // Also remove from any active call/chat sessions
-      removeAstrologerFromActiveSessions(updatedAstrologer._id);
+      console.log(`✅ Astrologer ${updatedAstrologer._id} set to offline`);
+      // ... rest of your code
     } else {
       console.log(`ℹ️ No astrologer found with socketId: ${socket.id}`);
-      
-      // Check if it's a regular user
-      const updatedUser = await User.findOneAndUpdate(
-        { socketId: socket.id },
-        { $set: { socketId: null, isOnline: false } },
-        { new: true }
-      );
-      
-      if (updatedUser) {
-        console.log(`👤 User ${updatedUser._id} set to offline`);
-      }
     }
   } catch (error) {
-    console.error("❌ Error updating status on disconnect:", error);
-  }
-
-  // Remove from activeUsers
-  let removedUserId = null;
-  for (const [userId, sockId] of activeUsers.entries()) {
-    if (sockId === socket.id) {
-      activeUsers.delete(userId);
-      removedUserId = userId;
-      break;
-    }
+    console.error("❌ Error in disconnect handler:", error);
+    console.error("❌ Error stack:", error.stack);
   }
   
-  if (removedUserId) {
-    console.log(`🗑️ Removed user ${removedUserId} from active users`);
-  }
+  console.log("🔌 DEBUG: End of disconnect handler");
 });
   });
 
