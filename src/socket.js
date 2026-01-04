@@ -288,37 +288,33 @@ export const setupSocketIO = (server) => {
     });
 
     // Handle user disconnection
-    socket.on("disconnect", async () => {
+// In your socket server file
+socket.on("disconnect", async () => {
   console.log("A user disconnected:", socket.id);
 
   try {
-    // Find and update the user in the database
-    const updatedUser = await User.findOneAndUpdate(
-      { socketId: socket.id, isAstrologer: true },
+    // Find and update the astrologer's status
+    await mongoose.model("Astrologer").findOneAndUpdate(
+      { socketId: socket.id },
       { 
         $set: { 
-          isActive: false,
-          socketId: null // Also clear the socketId since user disconnected
-        } 
-      },
-      { new: true } // Return the updated document
-    );
-
-    // If user was found and updated, also remove from activeUsers map
-    if (updatedUser) {
-      console.log(`Astrologer ${updatedUser._id} marked as inactive`);
-    }
-
-    // Remove the user from the active users map
-    for (const [userId, socketId] of activeUsers.entries()) {
-      if (socketId === socket.id) {
-        activeUsers.delete(userId);
-        break;
+          status: "offline",
+          socketId: null // Clear socketId when disconnected
+        }
       }
-    }
-
+    );
+    
+    console.log(`Astrologer with socketId ${socket.id} set to offline`);
   } catch (error) {
-    console.error("Error updating user status on disconnect:", error);
+    console.error("Error updating astrologer status on disconnect:", error);
+  }
+
+  // Remove the user from the active users map
+  for (const [userId, socketId] of activeUsers.entries()) {
+    if (socketId === socket.id) {
+      activeUsers.delete(userId);
+      break;
+    }
   }
 });
   });
