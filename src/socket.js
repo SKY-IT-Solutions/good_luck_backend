@@ -289,51 +289,38 @@ export const setupSocketIO = (server) => {
 
     // Handle user disconnection
 // In your socket server file
-socket.on("disconnect", async () => {
-  console.log("🔌 DEBUG: Disconnect event triggered for socket:", socket.id);
-  console.log("🔌 DEBUG: Socket object exists?", !!socket);
-  console.log("🔌 DEBUG: Socket.id type:", typeof socket.id);
-  
-  // Check if Astrologer model is available
-  console.log("🔌 DEBUG: Astrologer model loaded?", !!Astrologer);
-  
+socket.on("disconnect", async (reason) => {
+  console.log("🔌 Socket disconnected:", socket.id, reason);
+
   try {
-    console.log("🔌 DEBUG: Entering try block");
-    
-    // Test a simple query first
-    console.log("🔌 DEBUG: Testing database connection...");
-    const test = await Astrologer.findOne({ socketId: socket.id }).select('_id').lean();
-    console.log("🔌 DEBUG: Test query result:", test);
-    
-    // Find and update the astrologer's status
-    console.log("🔌 DEBUG: Attempting findOneAndUpdate...");
-    const updatedAstrologer = await Astrologer.findOneAndUpdate(
-      { socketId: socket.id },
-      { 
-        $set: { 
-          status: "offline",
-          socketId: null,
-          isActive: false
-        }
-      },
-      { new: true }
-    );
-    
-    console.log("🔌 DEBUG: Update result:", updatedAstrologer);
-    
-    if (updatedAstrologer) {
-      console.log(`✅ Astrologer ${updatedAstrologer._id} set to offline`);
-      // ... rest of your code
-    } else {
-      console.log(`ℹ️ No astrologer found with socketId: ${socket.id}`);
+    if (socket.userType === "astrologer" && socket.userId) {
+      const updated = await Astrologer.findByIdAndUpdate(
+        socket.userId,
+        {
+          $set: {
+            status: "offline",
+            isActive: false,
+            socketId: null
+          }
+        },
+        { new: true }
+      );
+
+      console.log("✅ Astrologer offline:", updated?._id);
     }
-  } catch (error) {
-    console.error("❌ Error in disconnect handler:", error);
-    console.error("❌ Error stack:", error.stack);
+
+    if (socket.userType === "user" && socket.userId) {
+      await User.findByIdAndUpdate(socket.userId, {
+        isActive: false,
+        socketId: null
+      });
+    }
+
+  } catch (err) {
+    console.error("❌ Disconnect error:", err);
   }
-  
-  console.log("🔌 DEBUG: End of disconnect handler");
 });
+
   });
 
   return io;
