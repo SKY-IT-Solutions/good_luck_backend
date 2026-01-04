@@ -294,27 +294,40 @@ socket.on("disconnect", async () => {
 
   try {
     // Find and update the astrologer's status
-    await mongoose.model("Astrologer").findOneAndUpdate(
+    const updatedAstrologer = await Astrologer.findOneAndUpdate(
       { socketId: socket.id },
       { 
         $set: { 
           status: "offline",
-          socketId: null // Clear socketId when disconnected
+          socketId: null, // Clear socketId when disconnected
+          isActive: false // Also set isActive to false
         }
-      }
+      },
+      { new: true } // Return the updated document
     );
     
-    console.log(`Astrologer with socketId ${socket.id} set to offline`);
+    if (updatedAstrologer) {
+      console.log(`✅ Astrologer ${updatedAstrologer._id} (${socket.id}) set to offline`);
+      
+      // Also emit event to notify other users this astrologer went offline
+      socket.broadcast.emit('astrologer_offline', {
+        astrologerId: updatedAstrologer._id,
+        socketId: socket.id
+      });
+    } else {
+      console.log(`ℹ️ No astrologer found with socketId: ${socket.id}`);
+    }
   } catch (error) {
-    console.error("Error updating astrologer status on disconnect:", error);
+    console.error("❌ Error updating astrologer status on disconnect:", error);
   }
 
-  // Remove the user from the active users map
-  for (const [userId, socketId] of activeUsers.entries()) {
-    if (socketId === socket.id) {
-      activeUsers.delete(userId);
-      break;
-    }
+  // More efficient way to remove user from activeUsers
+  const userIdToRemove = Array.from(activeUsers.entries())
+    .find(([userId, sockId]) => sockId === socket.id)?.[0];
+  
+  if (userIdToRemove) {
+    activeUsers.delete(userIdToRemove);
+    console.log(`🗑️ Removed user ${userIdToRemove} from active users`);
   }
 });
   });
