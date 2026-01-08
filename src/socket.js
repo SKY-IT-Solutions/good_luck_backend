@@ -98,7 +98,8 @@ export const setupSocketIO = (server) => {
         }
 
         astrologer.socketId = socket.id; // Update socket ID
-        // astrologer.isActive = true; // Set astrologer as active
+        astrologer.isActive = true; // Set astrologer as active
+        astrologer.status = "available"; // Set astrologer as active
         await astrologer.save(); // Save the astrologer document
         activeUsers.set(astrologerId, socket.id); // Track active astrologers
         console.log(
