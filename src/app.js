@@ -14,6 +14,12 @@ setupSocketIO(server); // Use the same server for Socket.IO
 
 app.use(cors());
 
+// Request logging middleware for debugging
+app.use((req, res, next) => {
+  console.log(`📥 ${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
@@ -99,6 +105,12 @@ app.get("/", (req, res) => {
 });
 
 // Hello World
+
+// 404 catch-all handler - log which routes are not found
+app.use((req, res, next) => {
+  console.log(`❌ 404 NOT FOUND: ${req.method} ${req.url}`);
+  res.status(404).json({ error: 'Route not found', path: req.url, method: req.method });
+});
 
 // Error handling middleware
 app.use(errorHandler);

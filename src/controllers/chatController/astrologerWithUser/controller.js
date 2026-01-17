@@ -377,8 +377,8 @@ export async function handleResumeChat(io, data) {
   }
 }
 
-const appID = "c2d5a4535c454c269d18721d8dde17f1";
-const appCertificate = "b9c7be6f06ac449191f9fed8e7a58104";
+const appID = process.env.AGORA_APP_ID;
+const appCertificate = process.env.APP_CERTIFICATE;
 
 // Function to handle call requests
 export async function handleCallRequest(io, data, socket) {
