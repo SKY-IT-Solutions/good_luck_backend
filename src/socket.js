@@ -25,6 +25,7 @@ export const setupSocketIO = (server) => {
   const io = new Server(server, {
     cors: {
       origin: ["http://localhost:3000", "http://192.168.0.100:8081"],
+      // origin: "*",
       methods: ["GET", "POST", "PATCH", "DELETE"],
       allowedHeaders: ["Content-Type"],
       credentials: true,
@@ -255,9 +256,12 @@ export const setupSocketIO = (server) => {
 
     // Handle call termination
     socket.on("end-call", async (data) => {
-      const { roomId, sender } = data; // Extract sender from the data
+      const { roomId, sender } = data;
+      console.log(
+        `📞 Received end-call event for room ${roomId} from ${sender}`
+      );
 
-      // Call the function to handle the end of the chat, passing the sender
+      // Call the function to handle the end of the call, passing the sender
       await handleEndCall(io, roomId, sender);
     });
 
@@ -289,69 +293,71 @@ export const setupSocketIO = (server) => {
     });
 
     // Handle user disconnection
-// In your socket server file
-socket.on("disconnect", async () => {
-  console.log("🔌1111 DEBUG: Disconnect event triggered for socket:", socket.id);
-  
-  try {
-    // First, try to find and update the astrologer by socketId
-    const updatedAstrologer = await Astrologer.findOneAndUpdate(
-      { socketId: socket.id },
-      { 
-        $set: { 
-          status: "offline",
-          socketId: null,
-          isActive: false
-        }
-      },
-      { new: true }
-    );
-    
-    if (updatedAstrologer) {
-      console.log(`✅ Astrologer ${updatedAstrologer._id} set to offline`);
-      // Remove from activeUsers map
-      for (const [userId, sockId] of activeUsers.entries()) {
-        if (sockId === socket.id) {
-          activeUsers.delete(userId);
-          console.log(`✅ Removed user ${userId} from activeUsers map`);
-          break;
-        }
-      }
-    } else {
-      console.log(`ℹ️ No astrologer found with socketId: ${socket.id}`);
-      
-      // Also try to find and update regular users
-      const updatedUser = await User.findOneAndUpdate(
-        { socketId: socket.id },
-        { 
-          $set: { 
-            isActive: false,
-            socketId: null
-          }
-        },
-        { new: true }
+    // In your socket server file
+    socket.on("disconnect", async () => {
+      console.log(
+        "🔌1111 DEBUG: Disconnect event triggered for socket:",
+        socket.id
       );
-      
-      if (updatedUser) {
-        console.log(`✅ User ${updatedUser._id} set to offline`);
-        // Remove from activeUsers map
-        for (const [userId, sockId] of activeUsers.entries()) {
-          if (sockId === socket.id) {
-            activeUsers.delete(userId);
-            console.log(`✅ Removed user ${userId} from activeUsers map`);
-            break;
+
+      try {
+        // First, try to find and update the astrologer by socketId
+        const updatedAstrologer = await Astrologer.findOneAndUpdate(
+          { socketId: socket.id },
+          {
+            $set: {
+              status: "offline",
+              socketId: null,
+              isActive: false,
+            },
+          },
+          { new: true }
+        );
+
+        if (updatedAstrologer) {
+          console.log(`✅ Astrologer ${updatedAstrologer._id} set to offline`);
+          // Remove from activeUsers map
+          for (const [userId, sockId] of activeUsers.entries()) {
+            if (sockId === socket.id) {
+              activeUsers.delete(userId);
+              console.log(`✅ Removed user ${userId} from activeUsers map`);
+              break;
+            }
+          }
+        } else {
+          console.log(`ℹ️ No astrologer found with socketId: ${socket.id}`);
+
+          // Also try to find and update regular users
+          const updatedUser = await User.findOneAndUpdate(
+            { socketId: socket.id },
+            {
+              $set: {
+                isActive: false,
+                socketId: null,
+              },
+            },
+            { new: true }
+          );
+
+          if (updatedUser) {
+            console.log(`✅ User ${updatedUser._id} set to offline`);
+            // Remove from activeUsers map
+            for (const [userId, sockId] of activeUsers.entries()) {
+              if (sockId === socket.id) {
+                activeUsers.delete(userId);
+                console.log(`✅ Removed user ${userId} from activeUsers map`);
+                break;
+              }
+            }
           }
         }
+      } catch (error) {
+        console.error("❌ Error in disconnect handler:", error);
+        console.error("❌ Error stack:", error.stack);
       }
-    }
-  } catch (error) {
-    console.error("❌ Error in disconnect handler:", error);
-    console.error("❌ Error stack:", error.stack);
-  }
-  
-  console.log(`User disconnected: ${socket.id}`);
-});
 
+      console.log(`User disconnected: ${socket.id}`);
+    });
   });
 
   return io;

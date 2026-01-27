@@ -643,6 +643,9 @@ export async function handleCallResponse(io, data, socket) {
 // Function to handle the end of the call and update the astrologer's status
 export async function handleEndCall(io, roomId, sender) {
   try {
+    console.log(
+      `📡 Broadcasting call-end to room ${roomId}, sender: ${sender}`
+    );
     // End the call and stop the timer, passing the sender information to determine the reason
     endCall(io, roomId, sender);
 
@@ -664,9 +667,9 @@ export async function handleEndCall(io, roomId, sender) {
     astrologer.status = "available";
     await astrologer.save();
 
-    console.log("Astrologer's status updated to available:", astrologer._id);
+    console.log("✅ Astrologer status updated to available:", astrologer._id);
   } catch (error) {
-    console.error("Error handling end of call:", error);
+    console.error("❌ Error handling end of call:", error);
   }
 }
 
