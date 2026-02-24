@@ -95,7 +95,7 @@ const astrologerRequestSchema = new Schema(
     },
     certifications: {
       type: [String],
-      required: [true, "Certifications are required"],
+      default: [],
     },
     adhar_card: [String],
     pan_card: [String],

@@ -65,8 +65,8 @@ import affiliateRouter from "./routes/affiliate/affiliate.routes.js";
 // Use routes
 app.use("/good_luck/api/v1/admin", adminRoutes);
 app.use("/good_luck/api/v1/auth", userRoutes);
-app.use("/good_luck/api/v1/astrologer", astrologerRoutes);
 app.use("/good_luck/api/v1/astrologer/category", astrologerCategoryRoutes);
+app.use("/good_luck/api/v1/astrologer", astrologerRoutes);
 app.use("/good_luck/api/v1/astrologerChat", astrologerChatRoutes);
 app.use("/good_luck/api/v1/withdraw", withdraw);
 app.use("/good_luck/api/v1/dating", datingRoutes);

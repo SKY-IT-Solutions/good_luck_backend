@@ -31,6 +31,8 @@ const generateUniquePromoCode = async () => {
 // Create Astrologer Request
 export const createAstrologerRequest = asyncHandler(async (req, res) => {
   try {
+    console.log("=== CREATE ASTROLOGER REQUEST ===");
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
     const {
       Fname,
       Lname,
@@ -55,21 +57,27 @@ export const createAstrologerRequest = asyncHandler(async (req, res) => {
       "phone",
       "specialisation",
       "chat_price",
-      "video_price",
       "years_of_experience",
       "profile_picture",
       "description",
       "language",
-      "certifications",
       "adhar_card",
       "pan_card",
     ];
 
-    const missingFields = requiredFields.filter((field) => !req.body[field]);
+    const missingFields = requiredFields.filter((field) => {
+      const value = req.body[field];
+      if (value === undefined || value === null || value === "") return true;
+      if (Array.isArray(value) && value.length === 0) return true;
+      return false;
+    });
+
+    console.log("Missing fields:", missingFields);
 
     if (missingFields.length > 0) {
+      console.log("Returning 400 - Missing required fields:", missingFields);
       return res.status(400).json(
-        new ApiResponse(400, null, "Missing required fields", {
+        new ApiResponse(400, null, `Missing required fields: ${missingFields.join(", ")}`, {
           missingFields,
         })
       );
@@ -79,61 +87,115 @@ export const createAstrologerRequest = asyncHandler(async (req, res) => {
     const existsUser = await User.findOne({ phone });
     const existsAstrologer = await Astrologer.findOne({ phone });
 
-    if (existsUser) {
-      if (existsUser.isAstrologer) {
-        if (!existsAstrologer) {
-          const astrologer = new AstrologerRequest({
-            authId: existsAuth ? existsAuth._id : null,
-            userId: existsUser._id,
-            Fname: Fname,
-            Lname: Lname,
-            phone: existsUser.phone,
-            specialisation,
-            rating: 2,
-            total_number_service_provide: 0,
-            total_earning: 0,
-            chat_price,
-            video_price,
-            call_price: call_price || 200,
-            years_of_experience,
-            profile_picture,
-            description,
-            language,
-            certifications,
-            adhar_card,
-            pan_card,
-          });
-
-          await astrologer.save();
-
-          return res
-            .status(201)
-            .json(
-              new ApiResponse(
-                201,
-                astrologer,
-                "Astrologer created successfully"
-              )
-            );
-        } else {
-          return res
-            .status(400)
-            .json(new ApiResponse(400, null, "User is already an astrologer"));
-        }
-      } else {
-        return res
-          .status(400)
-          .json(
-            new ApiResponse(
-              400,
-              null,
-              "Phone number is already used by a normal user"
-            )
-          );
-      }
-    } else {
+    if (!existsUser) {
       return res.status(404).json(new ApiResponse(404, null, "User not found"));
     }
+
+    // If user already has an Astrologer record, update it with the form data
+    if (existsAstrologer) {
+      Object.assign(existsAstrologer, {
+        Fname,
+        Lname,
+        specialisation,
+        chat_price,
+        video_price,
+        call_price: call_price || 200,
+        years_of_experience,
+        profile_picture,
+        description,
+        language,
+        certifications: certifications || [],
+        adhar_card,
+        pan_card,
+      });
+
+      await existsAstrologer.save();
+
+      // Ensure user is marked as astrologer
+      if (!existsUser.isAstrologer) {
+        await User.findByIdAndUpdate(existsUser._id, { isAstrologer: true });
+      }
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            existsAstrologer,
+            "Astrologer profile updated successfully"
+          )
+        );
+    }
+
+    // If user already has a pending astrologer request, update it
+    const existingRequest = await AstrologerRequest.findOne({ phone });
+    if (existingRequest) {
+      Object.assign(existingRequest, {
+        authId: existsAuth ? existsAuth._id : existingRequest.authId,
+        userId: existsUser._id,
+        Fname,
+        Lname,
+        specialisation,
+        chat_price,
+        video_price,
+        call_price: call_price || 200,
+        years_of_experience,
+        profile_picture,
+        description,
+        language,
+        certifications: certifications || [],
+        adhar_card,
+        pan_card,
+        request_status: "pending",
+      });
+
+      await existingRequest.save();
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            existingRequest,
+            "Astrologer request updated successfully"
+          )
+        );
+    }
+
+    // Create new astrologer request
+    const astrologer = new AstrologerRequest({
+      authId: existsAuth ? existsAuth._id : null,
+      userId: existsUser._id,
+      Fname: Fname,
+      Lname: Lname,
+      phone: existsUser.phone,
+      specialisation,
+      rating: 2,
+      total_number_service_provide: 0,
+      total_earning: 0,
+      chat_price,
+      video_price,
+      call_price: call_price || 200,
+      years_of_experience,
+      profile_picture,
+      description,
+      language,
+      certifications: certifications || [],
+      adhar_card,
+      pan_card,
+    });
+
+    await astrologer.save();
+
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          astrologer,
+          "Astrologer request created successfully"
+        )
+      );
   } catch (error) {
     // Handle unexpected errors
     if (error.name === "ValidationError") {
@@ -511,6 +573,9 @@ export const approveAstrologer = asyncHandler(async (req, res) => {
   });
 
   await newAstrologer.save();
+
+  // Mark the user as an astrologer
+  await User.findByIdAndUpdate(astrologerRequest.userId, { isAstrologer: true });
 
   // Delete the AstrologerRequest record
   await astrologerRequest.deleteOne();
@@ -1101,7 +1166,7 @@ export const toggleAstrologerStatus = asyncHandler(async (req, res) => {
 
     // Update isActive status
     astrologer.isActive = isActive;
-    
+
     // Update status based on isActive value
     if (isActive === false) {
       astrologer.status = "offline";
@@ -1109,7 +1174,7 @@ export const toggleAstrologerStatus = asyncHandler(async (req, res) => {
       // If making active, you might want to set status to "available" or keep current
       astrologer.status = "available"; // or astrologer.status = astrologer.status;
     }
-    
+
     await astrologer.save();
 
     return res
@@ -1117,8 +1182,8 @@ export const toggleAstrologerStatus = asyncHandler(async (req, res) => {
       .json(
         new ApiResponse(
           200,
-          { 
-            isActive: astrologer.isActive, 
+          {
+            isActive: astrologer.isActive,
             status: astrologer.status
           },
           "Astrologer status updated successfully"
