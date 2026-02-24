@@ -12,6 +12,7 @@ import { Dating } from "../../models/dating/dating.model.js";
 import { Admin } from "../../models/admin/admin.model.js";
 import { generateTransactionId } from "../../utils/generateTNX.js";
 import { Astrologer } from "../../models/astrologer/astroler.model.js";
+import AstrologerRequest from "../../models/astrologer/astrologerRequest.model.js";
 import { AdSubscription } from "../../models/subscription/adSubcription.model.js";
 import AffiliateMarketer from "../../models/affiliateMarketer/affiliateMarketer.model.js";
 import { sendOTP } from "../../utils/sendOtp.js";
@@ -1854,6 +1855,7 @@ const deleteUserAccount = async (req, res) => {
     await Matrimony.findOneAndDelete({ userId });
     await Dating.findOneAndDelete({ userId });
     await Astrologer.findOneAndDelete({ userId });
+    await AstrologerRequest.findOneAndDelete({ userId });
 
     // Delete user
     await User.findByIdAndDelete(userId);
